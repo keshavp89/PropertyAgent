@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum ListingIntent {
+  SALE
+  RENT
+}
+
+enum PropertyType {
+  APARTMENT
+  HOUSE
+  VILLA
+  PLOT
+  LAND
+  OFFICE
+  COMMERCIAL
+  WAREHOUSE
+}
+
+enum PropertyStatus {
+  AVAILABLE
+  UNDER_OFFER
+  SOLD
+  RENTED
+  OFF_MARKET
+}
+
+enum Furnishing {
+  UNFURNISHED
+  SEMI
+  FURNISHED
+  NOT_APPLICABLE
+}
+
+enum CustomerKind {
+  BUYER
+  TENANT
+  SELLER
+  LANDLORD
+  INVESTOR
+}
+
+enum EnquiryStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  VIEWING
+  NEGOTIATING
+  WON
+  LOST
+}
+
+enum FollowUpKind {
+  CALL
+  VISIT
+  EMAIL
+  WHATSAPP
+  NOTE
+  REQUIREMENT_CHANGE
+}
+
+model Property {
+  id               String         @id @default(cuid())
+  organizationId   String         @db.Uuid
+  title            String
+  propertyType     PropertyType
+  intent           ListingIntent
+  status           PropertyStatus @default(AVAILABLE)
+  priceInr         Int
+  depositInr       Int?
+  maintenanceInr   Int?
+  bedrooms         Int?
+  bathrooms        Int?
+  areaSqft         Int?
+  floor            Int?
+  totalFloors      Int?
+  city             String
+  locality         String
+  addressLine      String?
+  furnishing       Furnishing     @default(UNFURNISHED)
+  amenities        String[]
+  description      String
+  listedByUserId   String         @db.Uuid
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  enquiries        Enquiry[]
+
+  @@index([organizationId, intent, status])
+  @@index([organizationId, city])
+  @@index([organizationId, updatedAt])
+}
+
+model Customer {
+  id               String       @id @default(cuid())
+  organizationId   String       @db.Uuid
+  name             String
+  phone            String
+  email            String?
+  kind             CustomerKind
+  assignedUserId   String       @db.Uuid
+  notes            String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  requirements     Requirement[]
+  enquiries        Enquiry[]
+  followUps        FollowUp[]
+
+  @@index([organizationId, assignedUserId])
+  @@index([organizationId, updatedAt])
+}
+
+model Requirement {
+  id               String         @id @default(cuid())
+  organizationId   String         @db.Uuid
+  customerId       String
+  version          Int
+  intent           ListingIntent
+  propertyTypes    PropertyType[]
+  minPriceInr      Int?
+  maxPriceInr      Int?
+  minBedrooms      Int?
+  maxBedrooms      Int?
+  minAreaSqft      Int?
+  cities           String[]
+  localities       String[]
+  amenities        String[]
+  notes            String?
+  active           Boolean        @default(true)
+  createdByUserId  String         @db.Uuid
+  createdAt        DateTime       @default(now())
+  customer         Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  followUps        FollowUp[]
+
+  @@index([organizationId, customerId, active])
+}
+
+model Enquiry {
+  id               String        @id @default(cuid())
+  organizationId   String        @db.Uuid
+  customerId       String
+  propertyId       String?
+  source           String
+  message          String
+  status           EnquiryStatus @default(NEW)
+  createdByUserId  String        @db.Uuid
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  customer         Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  property         Property?     @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  followUps        FollowUp[]
+
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, customerId])
+}
+
+model FollowUp {
+  id               String       @id @default(cuid())
+  organizationId   String       @db.Uuid
+  customerId       String
+  enquiryId        String?
+  requirementId    String?
+  kind             FollowUpKind
+  notes            String
+  dueAt            DateTime?
+  completedAt      DateTime?
+  createdByUserId  String       @db.Uuid
+  createdAt        DateTime     @default(now())
+  customer         Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  enquiry          Enquiry?     @relation(fields: [enquiryId], references: [id], onDelete: SetNull)
+  requirement      Requirement? @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, dueAt])
+  @@index([organizationId, customerId])
+}
+
+model RateLimit {
+  key         String   @id
+  windowStart DateTime
+  count       Int
+}
